@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "creation": "2026-11-03 21:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "funktionen_section",
+  "lesbare_namen",
+  "kontakte_zuordnen",
+  "neue_mitglieder_manager",
+  "nacharbeiten_section",
+  "jetzt_nacharbeiten"
+ ],
+ "fields": [
+  {
+   "fieldname": "funktionen_section",
+   "fieldtype": "Section Break",
+   "label": "Funktionen"
+  },
+  {
+   "default": "1",
+   "description": "Nach „Sync Customers“ werden HD-Kunden, die nach der ERPNext-Kundennummer heißen, auf den Kundennamen umbenannt. Der ERPNext-Kunde behält seine Nummer.",
+   "fieldname": "lesbare_namen",
+   "fieldtype": "Check",
+   "label": "Lesbare Kundennamen in Helpdesk"
+  },
+  {
+   "default": "1",
+   "description": "Ein Kontakt, der in ERPNext am Kunden hängt, wird beim Speichern Mitglied des HD-Kunden.",
+   "fieldname": "kontakte_zuordnen",
+   "fieldtype": "Check",
+   "label": "Kontakte automatisch als Kundenmitglieder eintragen"
+  },
+  {
+   "default": "0",
+   "depends_on": "kontakte_zuordnen",
+   "description": "Gilt nur für neu eingetragene Mitglieder. Ein Manager sieht alle Tickets seines Kunden. Standard: aus.",
+   "fieldname": "neue_mitglieder_manager",
+   "fieldtype": "Check",
+   "label": "Neue Mitglieder als Manager eintragen"
+  },
+  {
+   "fieldname": "nacharbeiten_section",
+   "fieldtype": "Section Break",
+   "label": "Vorhandene Daten"
+  },
+  {
+   "description": "Wendet die eingeschalteten Funktionen auf alle vorhandenen Kunden und Kontakte an. Bitte vorher speichern.",
+   "fieldname": "jetzt_nacharbeiten",
+   "fieldtype": "Button",
+   "label": "Jetzt nacharbeiten"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-11-03 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Helpdesk ERPNext Sync",
+ "name": "Helpdesk Sync Einstellungen",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

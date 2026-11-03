@@ -15,6 +15,13 @@ from helpdesk.integrations.erpnext import api as hd_api
 from helpdesk.integrations.erpnext.utils import CASCADE_FLAG, should_sync
 
 JOB_ID = "sync_hd_erpnext_customers"
+EINSTELLUNGEN = "Helpdesk Sync Einstellungen"
+FERTIG_EVENT = "helpdesk_erpnext_sync_fertig"
+
+
+def einstellungen():
+	"""Einstellungen; ohne gespeicherte Werte gelten die Feld-Standardwerte (beide Funktionen an)."""
+	return frappe.get_cached_doc(EINSTELLUNGEN)
 
 
 @frappe.whitelist()
@@ -41,6 +48,28 @@ def sync_all_customers() -> None:
 	frappe.publish_realtime("helpdesk:erpnext-sync-end", user=frappe.session.user, after_commit=True)
 
 
+@frappe.whitelist()
+def jetzt_nacharbeiten() -> None:
+	"""Knopf in den Einstellungen: vorhandene Kunden und Kontakte nacharbeiten (Hintergrund-Job)."""
+	frappe.only_for("System Manager")
+	if not should_sync():
+		frappe.throw(
+			_("Die ERPNext-Integration in Helpdesk ist nicht aktiv."),
+			title=_("Nacharbeiten nicht möglich"),
+		)
+	frappe.enqueue(_nacharbeiten_job, queue="short", timeout=1800, user=frappe.session.user)
+
+
+def _nacharbeiten_job(user: str) -> None:
+	ergebnis = nacharbeiten()
+	frappe.publish_realtime(
+		FERTIG_EVENT,
+		{"umbenannt": len(ergebnis["umbenannt"]), "mitglieder": ergebnis["mitglieder"]},
+		user=user,
+		after_commit=True,
+	)
+
+
 def nacharbeiten() -> dict:
 	umbenannt = lesbare_namen_herstellen()
 	mitglieder = kontakte_zuordnen()
@@ -54,7 +83,7 @@ def lesbare_namen_herstellen() -> list[tuple[str, str]]:
 	dafuer abgeschaltet, sonst wuerde sie auch den ERPNext-Kunden umbenennen.
 	"""
 	ergebnis = []
-	if not should_sync():
+	if not should_sync() or not einstellungen().lesbare_namen:
 		return ergebnis
 
 	kunden = frappe.get_all(
@@ -92,7 +121,7 @@ def lesbare_namen_herstellen() -> list[tuple[str, str]]:
 
 def kontakte_zuordnen() -> int:
 	"""Alle Kontakte mit Kundenverweis als Mitglied des HD-Kunden eintragen."""
-	if not should_sync():
+	if not should_sync() or not einstellungen().kontakte_zuordnen:
 		return 0
 	kontakte = frappe.get_all(
 		"Dynamic Link",
@@ -109,7 +138,7 @@ def kontakte_zuordnen() -> int:
 
 def on_contact_update(doc, method=None) -> None:
 	"""Contact.on_update: Kontakt am ERPNext-Kunden -> Mitglied des HD-Kunden."""
-	if not should_sync():
+	if not should_sync() or not einstellungen().kontakte_zuordnen:
 		return
 	for link in doc.get("links") or []:
 		if link.link_doctype != "Customer":
@@ -124,7 +153,7 @@ def _mitglied_eintragen(hd_customer: str, contact: str) -> bool:
 	if frappe.db.exists("HD Customer Member", {"parent": hd_customer, "contact_name": contact}):
 		return False
 	hd = frappe.get_doc("HD Customer", hd_customer)
-	hd.append("contacts", {"contact_name": contact, "is_manager": 0})
+	hd.append("contacts", {"contact_name": contact, "is_manager": 1 if einstellungen().neue_mitglieder_manager else 0})
 	hd.flags.ignore_erpnext_sync = True
 	hd.save(ignore_permissions=True)
 	return True

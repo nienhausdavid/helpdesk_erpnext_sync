@@ -15,6 +15,19 @@ Kleine Zusatz-App für ERPNext v16 + Frappe Helpdesk. Sie ergänzt den eingebaut
    Massen-Sync für vorhandene Kontakte. Bestehende Mitglieder (auch Manager) bleiben, wie sie sind;
    Kontakte werden nie automatisch entfernt.
 
+## Einstellungen
+
+Desk → *Helpdesk Sync Einstellungen* (`/app/helpdesk-sync-einstellungen`, nur System Manager):
+
+| Schalter | Standard | Wirkung |
+|---|---|---|
+| Lesbare Kundennamen in Helpdesk | an | Umbenennung nach „Sync Customers“ |
+| Kontakte automatisch als Kundenmitglieder eintragen | an | Hook auf `Contact.on_update` und Massen-Sync |
+| Neue Mitglieder als Manager eintragen | aus | Gilt nur für neu eingetragene Mitglieder |
+
+Der Knopf **Jetzt nacharbeiten** wendet die eingeschalteten Funktionen auf alle vorhandenen Kunden und
+Kontakte an (Hintergrund-Job, Ergebnis als Hinweis). Voraussetzung: Die ERPNext-Integration in Helpdesk ist aktiv.
+
 ## Technik
 
 - `hooks.py`: `override_whitelisted_methods` ersetzt `helpdesk.integrations.erpnext.api.sync_hd_erpnext_customers`

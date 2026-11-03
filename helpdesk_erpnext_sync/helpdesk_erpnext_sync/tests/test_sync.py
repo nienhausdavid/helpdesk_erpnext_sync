@@ -104,3 +104,52 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 		frappe.db.set_single_value("ERPNext HD Settings", "enabled", 0)
 		self.assertEqual(sync.lesbare_namen_herstellen(), [])
 		self.assertEqual(sync.kontakte_zuordnen(), 0)
+
+	# --- Einstellungen -------------------------------------------------
+
+	def einstellung(self, **werte):
+		"""Wie das gespeicherte Formular: immer alle Felder setzen (Standard: an, an, aus)."""
+		alle = {"lesbare_namen": 1, "kontakte_zuordnen": 1, "neue_mitglieder_manager": 0, **werte}
+		frappe.db.set_single_value("Helpdesk Sync Einstellungen", alle)
+		frappe.clear_document_cache("Helpdesk Sync Einstellungen")
+
+	def test_standardwerte_ohne_gespeicherte_einstellungen(self):
+		frappe.db.delete("Singles", {"doctype": "Helpdesk Sync Einstellungen"})
+		frappe.clear_document_cache("Helpdesk Sync Einstellungen")
+		e = sync.einstellungen()
+		self.assertEqual((e.lesbare_namen, e.kontakte_zuordnen, e.neue_mitglieder_manager), (1, 1, 0))
+
+	def test_namen_schalter_aus(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		self.einstellung(lesbare_namen=0)
+		self.assertEqual(sync.lesbare_namen_herstellen(), [])
+		self.assertEqual(frappe.db.get_value("Customer", kunde.name, "hd_customer"), kunde.name)
+		self.einstellung()
+
+	def test_kontakte_schalter_aus(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		sync.lesbare_namen_herstellen()
+		self.einstellung(kontakte_zuordnen=0)
+		kontakt = self.kontakt(kunde)
+		self.assertFalse(frappe.db.exists("HD Customer Member", {"contact_name": kontakt.name}))
+		self.assertEqual(sync.kontakte_zuordnen(), 0)
+		self.einstellung()
+
+	def test_neue_mitglieder_als_manager(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		sync.lesbare_namen_herstellen()
+		self.einstellung(neue_mitglieder_manager=1)
+		kontakt = self.kontakt(kunde)
+		self.assertEqual(frappe.db.get_value("HD Customer Member", {"contact_name": kontakt.name}, "is_manager"), 1)
+		self.einstellung()
+
+	def test_knopf_nur_fuer_system_manager(self):
+		frappe.set_user("Guest")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				sync.jetzt_nacharbeiten()
+		finally:
+			frappe.set_user("Administrator")
