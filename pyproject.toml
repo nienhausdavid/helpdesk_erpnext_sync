@@ -1,0 +1,18 @@
+[project]
+name = "helpdesk_erpnext_sync"
+authors = [
+    { name = "David Nienhaus", email = "317006733+nienhausdavid@users.noreply.github.com" },
+]
+description = "Ergaenzt den Kunden-Sync zwischen Frappe Helpdesk und ERPNext: lesbare Kundennamen und Kontakte als Kundenmitglieder"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0,<17.0.0"
+erpnext = ">=16.0.0,<17.0.0"
+helpdesk = ">=1.31.0,<2.0.0"
