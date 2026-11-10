@@ -10,11 +10,14 @@ frappe.ui.form.on("Customer", {
 				.each(function () {
 					const $nachbar = $(this).next(".hd-kontakt-verknuepfen");
 					if ($nachbar.length) return;
+					// gleiche Knopf-Vorlage wie das native "+ Kontakt" (gleiche Höhe und Schrift)
 					const $knopf = $(
-						`<button class="btn btn-default btn-sm hd-kontakt-verknuepfen" style="margin-left: 8px;">${frappe.utils.escape_html(
-							__("Kontakt verknüpfen")
-						)}</button>`
-					).on("click", () => kontakt_verknuepfen(frm));
+						frappe.ui.button.html({
+							label: __("Kontakt verknüpfen"),
+							size: "sm",
+							css_class: "hd-kontakt-verknuepfen",
+						})
+					).css("margin-left", "8px").on("click", () => kontakt_verknuepfen(frm));
 					$(this).after($knopf);
 				});
 		};
