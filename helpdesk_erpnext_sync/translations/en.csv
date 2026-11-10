@@ -15,3 +15,8 @@ Helpdesk-Kunden anlegen,Create Helpdesk customer
 Helpdesk-Kunde angelegt: {0},Helpdesk customer created: {0}
 In Helpdesk Mitglied von: {0},Member in Helpdesk of: {0}
 In Helpdesk kein Mitglied mehr von: {0},No longer a member in Helpdesk of: {0}
+Kontakt verknüpfen,Link contact
+Bestehenden Kontakt verknüpfen,Link existing contact
+Kontakt,Contact
+Verknüpfen,Link
+Falls dieser Kunde noch keinen Helpdesk-Kunden hat.,If this customer has no Helpdesk customer yet.

@@ -279,6 +279,19 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 		alt.save()
 		self.assertEqual(frappe.db.get_value("Customer", erp.name, "hd_customer"), name)
 
+	def test_kontakt_verknuepfen_knopf(self):
+		kunde = self.kunde_ohne_helpdesk()
+		frei = self.kontakt(None, vorname="Lose")
+		sync.kontakt_verknuepfen(kunde.name, frei.name, 1)
+		self.assertTrue(frappe.db.exists("Dynamic Link", {"parent": frei.name, "link_doctype": "Customer", "link_name": kunde.name}))
+		self.assertEqual(self.mitglieder(self.kundenname), [frei.name])
+		sync.kontakt_verknuepfen(kunde.name, frei.name, 0)  # zweites Mal: keine Dublette
+		self.assertEqual(frappe.db.count("Dynamic Link", {"parent": frei.name, "link_name": kunde.name}), 1)
+
+	def test_quick_entry_haken_vorhanden(self):
+		df = frappe.get_meta("Contact").get_field("hd_kunde_anlegen")
+		self.assertTrue(df and df.allow_in_quick_entry)
+
 	def test_knopf_nur_fuer_system_manager(self):
 		frappe.set_user("Guest")
 		try:

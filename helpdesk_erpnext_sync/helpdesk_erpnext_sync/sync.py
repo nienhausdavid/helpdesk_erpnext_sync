@@ -331,6 +331,18 @@ def on_contact_update(doc, method=None) -> None:
 		frappe.msgprint(_("In Helpdesk kein Mitglied mehr von: {0}").format(", ".join(entfernt)), alert=True)
 
 
+@frappe.whitelist()
+def kontakt_verknuepfen(kunde: str, kontakt: str, hd_kunde_anlegen: int | str = 0) -> None:
+	"""Knopf am Kundenformular: bestehenden Kontakt mit dem Kunden verknüpfen (Rechte des Benutzers)."""
+	frappe.has_permission("Customer", "read", kunde, throw=True)
+	doc = frappe.get_doc("Contact", kontakt)
+	doc.check_permission("write")
+	if not _hat_kundenverweis(kontakt, kunde):
+		doc.append("links", {"link_doctype": "Customer", "link_name": kunde})
+	doc.set(HAKEN, 1 if frappe.utils.cint(hd_kunde_anlegen) else 0)
+	doc.save()
+
+
 def on_contact_trash(doc, method=None) -> None:
 	"""Contact.on_trash: Mitgliedschaften loesen, sonst blockiert der Verweis im HD-Kunden das Loeschen."""
 	if frappe.flags.get(EIGEN_FLAG) or not should_sync() or not einstellungen().kontakte_zuordnen:

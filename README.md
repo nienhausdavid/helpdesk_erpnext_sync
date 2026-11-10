@@ -15,9 +15,12 @@ Kleine Zusatz-App für ERPNext v16 + Frappe Helpdesk. Sie ergänzt den eingebaut
    verknüpft, wird er Mitglied des HD-Kunden (kein Manager). Wird die Verknüpfung entfernt oder der
    Kontakt gelöscht, endet die Mitgliedschaft. Umgekehrt: Wird in Helpdesk ein Mitglied hinzugefügt oder
    entfernt, wird der Kontakt in ERPNext verknüpft bzw. gelöst.
-4. **HD-Kunden beim Kontakt anlegen.** Im Kontaktformular gibt es den Haken **„Helpdesk-Kunden anlegen“**.
-   Beim Speichern wird für jeden verknüpften Kunden ohne HD-Kunden einer angelegt (lesbarer Name, verknüpft),
+4. **HD-Kunden beim Kontakt anlegen.** Im Dialog „Neu Kontakt“ am Kunden (und im vollständigen Formular)
+   gibt es den Haken **„Helpdesk-Kunden anlegen“**. Beim Speichern wird für jeden verknüpften Kunden ohne HD-Kunden einer angelegt (lesbarer Name, verknüpft),
    der Kontakt wird Mitglied, der Haken springt zurück. Ohne Haken wird nie ein HD-Kunde angelegt.
+
+5. **Bestehenden Kontakt verknüpfen.** Am Kundenformular (Tab „Adresse & Kontakt“) gibt es neben
+   „+ Kontakt“ den Knopf **„Kontakt verknüpfen“** (Kontakt wählen, optional HD-Kunden anlegen).
 
 Der Massen-Lauf („Sync Customers“ / „Jetzt nacharbeiten“) trägt nur nach und entfernt nichts.
 
@@ -39,7 +42,7 @@ Kontakte an (Hintergrund-Job, Ergebnis als Hinweis). Voraussetzung: Die ERPNext-
 
 - `hooks.py`: `override_whitelisted_methods` ersetzt `helpdesk.integrations.erpnext.api.sync_hd_erpnext_customers`
   (Aufruf des Knopfs); `doc_events` für `Customer`, `Contact`, `HD Customer`;
-  `after_install`/`after_migrate` legen das Zusatzfeld `Contact.hd_kunde_anlegen` an (`install.py`).
+  `doctype_js` lädt `public/js/kunde.js` (Knopf am Kunden); `after_install`/`after_migrate` legen das Zusatzfeld `Contact.hd_kunde_anlegen` an (`install.py`).
 - `helpdesk_erpnext_sync/helpdesk_erpnext_sync/sync.py`: gesamte Logik.
 - Tests: `bench --site <site> run-tests --app helpdesk_erpnext_sync`
 

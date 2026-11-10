@@ -18,6 +18,7 @@ def zusatzfelder_anlegen() -> None:
 					),
 					"insert_after": "links",
 					"default": "0",
+					"allow_in_quick_entry": 1,
 					"no_copy": 1,
 					"print_hide": 1,
 					"report_hide": 1,

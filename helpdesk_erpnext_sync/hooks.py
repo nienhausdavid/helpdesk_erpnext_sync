@@ -13,6 +13,9 @@ override_whitelisted_methods = {
 	"helpdesk.integrations.erpnext.api.sync_hd_erpnext_customers": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.sync_hd_erpnext_customers",
 }
 
+# Knopf "Kontakt verknüpfen" am Kundenformular
+doctype_js = {"Customer": "public/js/kunde.js"}
+
 # Haken "Helpdesk-Kunden anlegen" am Kontakt
 after_install = "helpdesk_erpnext_sync.install.zusatzfelder_anlegen"
 after_migrate = "helpdesk_erpnext_sync.install.zusatzfelder_anlegen"
