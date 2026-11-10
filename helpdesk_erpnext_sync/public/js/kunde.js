@@ -11,7 +11,7 @@ frappe.ui.form.on("Customer", {
 					const $nachbar = $(this).next(".hd-kontakt-verknuepfen");
 					if ($nachbar.length) return;
 					const $knopf = $(
-						`<button class="btn btn-default btn-sm hd-kontakt-verknuepfen">${frappe.utils.escape_html(
+						`<button class="btn btn-default btn-sm hd-kontakt-verknuepfen" style="margin-left: 8px;">${frappe.utils.escape_html(
 							__("Kontakt verknüpfen")
 						)}</button>`
 					).on("click", () => kontakt_verknuepfen(frm));
