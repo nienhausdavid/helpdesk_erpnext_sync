@@ -7,6 +7,7 @@
   "funktionen_section",
   "lesbare_namen",
   "kontakte_zuordnen",
+  "mitglieder_nach_erpnext",
   "neue_mitglieder_manager",
   "nacharbeiten_section",
   "jetzt_nacharbeiten"
@@ -19,17 +20,25 @@
   },
   {
    "default": "1",
-   "description": "Nach „Sync Customers“ werden HD-Kunden, die nach der ERPNext-Kundennummer heißen, auf den Kundennamen umbenannt. Der ERPNext-Kunde behält seine Nummer.",
+   "description": "HD-Kunden heißen wie der Kunde, nicht wie die ERPNext-Kundennummer. Ändert sich der Kundenname in ERPNext, wird der HD-Kunde mit umbenannt. Der ERPNext-Kunde behält seine Nummer.",
    "fieldname": "lesbare_namen",
    "fieldtype": "Check",
    "label": "Lesbare Kundennamen in Helpdesk"
   },
   {
    "default": "1",
-   "description": "Ein Kontakt, der in ERPNext am Kunden hängt, wird beim Speichern Mitglied des HD-Kunden.",
+   "description": "Wird ein Kontakt in ERPNext mit einem Kunden verknüpft, wird er Mitglied des HD-Kunden. Wird die Verknüpfung entfernt, endet die Mitgliedschaft.",
    "fieldname": "kontakte_zuordnen",
    "fieldtype": "Check",
    "label": "Kontakte automatisch als Kundenmitglieder eintragen"
+  },
+  {
+   "default": "1",
+   "depends_on": "kontakte_zuordnen",
+   "description": "Wird in Helpdesk ein Mitglied hinzugefügt oder entfernt, wird der Kontakt in ERPNext mit dem Kunden verknüpft bzw. die Verknüpfung entfernt.",
+   "fieldname": "mitglieder_nach_erpnext",
+   "fieldtype": "Check",
+   "label": "Mitglieder aus Helpdesk nach ERPNext übernehmen"
   },
   {
    "default": "0",
@@ -54,7 +63,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-11-03 21:00:00.000000",
+ "modified": "2026-11-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Helpdesk ERPNext Sync",
  "name": "Helpdesk Sync Einstellungen",

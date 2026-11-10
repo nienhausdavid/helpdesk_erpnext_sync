@@ -5,7 +5,7 @@ if (!window.helpdesk_erpnext_sync.listener) {
 	frappe.realtime.on("helpdesk_erpnext_sync_fertig", (r) => {
 		frappe.show_alert(
 			{
-				message: __("Nacharbeiten fertig: {0} Kunden umbenannt, {1} Kontakte neu eingetragen.", [
+				message: __("Nacharbeiten fertig: {0} Kunden umbenannt, {1} Kontakte zugeordnet.", [
 					r.umbenannt,
 					r.mitglieder,
 				]),

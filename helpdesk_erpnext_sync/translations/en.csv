@@ -4,9 +4,14 @@ Neue Mitglieder als Manager eintragen,Add new members as manager
 Funktionen,Features
 Vorhandene Daten,Existing data
 Jetzt nacharbeiten,Run now
-"Nacharbeiten fertig: {0} Kunden umbenannt, {1} Kontakte neu eingetragen.","Done: {0} customers renamed, {1} contacts added."
+"Nacharbeiten fertig: {0} Kunden umbenannt, {1} Kontakte zugeordnet.","Done: {0} customers renamed, {1} contacts assigned."
 Nacharbeiten läuft im Hintergrund …,Running in the background …
 Bitte zuerst speichern.,Please save first.
 Die ERPNext-Integration in Helpdesk ist nicht aktiv.,The ERPNext integration in Helpdesk is not enabled.
 Nacharbeiten nicht möglich,Cannot run
 Helpdesk Sync Einstellungen,Helpdesk Sync Settings
+Mitglieder aus Helpdesk nach ERPNext übernehmen,Apply Helpdesk members to ERPNext
+Helpdesk-Kunden anlegen,Create Helpdesk customer
+Helpdesk-Kunde angelegt: {0},Helpdesk customer created: {0}
+In Helpdesk Mitglied von: {0},Member in Helpdesk of: {0}
+In Helpdesk kein Mitglied mehr von: {0},No longer a member in Helpdesk of: {0}

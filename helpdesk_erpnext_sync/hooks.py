@@ -13,9 +13,21 @@ override_whitelisted_methods = {
 	"helpdesk.integrations.erpnext.api.sync_hd_erpnext_customers": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.sync_hd_erpnext_customers",
 }
 
-# Kontakte, die in ERPNext an einem Kunden hängen, werden Mitglied des HD-Kunden.
+# Haken "Helpdesk-Kunden anlegen" am Kontakt
+after_install = "helpdesk_erpnext_sync.install.zusatzfelder_anlegen"
+after_migrate = "helpdesk_erpnext_sync.install.zusatzfelder_anlegen"
+
+# Kunde: Verweis auf den HD-Kunden halten, geänderten Namen nachziehen.
+# Kontakt <-> Kundenmitglied: Kundenverweis in ERPNext und Mitgliedschaft in Helpdesk gleich halten.
 doc_events = {
+	"Customer": {
+		"on_update": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.on_customer_update",
+	},
 	"Contact": {
 		"on_update": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.on_contact_update",
+		"on_trash": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.on_contact_trash",
+	},
+	"HD Customer": {
+		"on_update": "helpdesk_erpnext_sync.helpdesk_erpnext_sync.sync.on_hd_customer_update",
 	},
 }
