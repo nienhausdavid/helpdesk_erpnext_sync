@@ -55,6 +55,18 @@ def _eigene_aenderung():
 	return _flag_gesetzt(EIGEN_FLAG)
 
 
+@contextmanager
+def _geschuetzt(titel: str, info: str):
+	"""Fehler in einem Einzelfall zurueckrollen und protokollieren, damit der Massenlauf weiterlaeuft."""
+	sicherung = "helpdesk_erpnext_sync_einzelfall"
+	frappe.db.savepoint(sicherung)
+	try:
+		yield
+	except Exception:
+		frappe.db.rollback(save_point=sicherung)
+		frappe.log_error(title=f"Helpdesk ERPNext Sync: {titel}", message=f"{info}\n{frappe.get_traceback()}")
+
+
 def _darf_hd_aendern(kunde: str, anlegen: bool = False) -> bool:
 	"""Rechte des angemeldeten Benutzers; die Hooks selbst speichern mit ignore_permissions."""
 	return bool(
@@ -87,7 +99,7 @@ def sync_all_customers() -> None:
 	"""Standard-Sync von Helpdesk, danach Namen und Kontakte nacharbeiten."""
 	verweise_reparieren()
 	hd_api.sync_all_customers()
-	nacharbeiten()
+	nacharbeiten(verweise=False)  # Verweise wurden vor dem Standard-Sync repariert, danach setzt dieser sie selbst
 	frappe.publish_realtime("helpdesk:erpnext-sync-end", user=frappe.session.user, after_commit=True)
 
 
@@ -100,7 +112,7 @@ def jetzt_nacharbeiten() -> None:
 			_("Die ERPNext-Integration in Helpdesk ist nicht aktiv."),
 			title=_("Nacharbeiten nicht möglich"),
 		)
-	frappe.enqueue(_nacharbeiten_job, queue="short", timeout=1800, user=frappe.session.user)
+	frappe.enqueue(_nacharbeiten_job, queue="long", timeout=12000, user=frappe.session.user)
 
 
 def _nacharbeiten_job(user: str) -> None:
@@ -113,9 +125,10 @@ def _nacharbeiten_job(user: str) -> None:
 	)
 
 
-def nacharbeiten() -> dict:
+def nacharbeiten(verweise: bool = True) -> dict:
 	"""Gleicht alles Vorhandene ab. Traegt nur nach, entfernt nie etwas."""
-	verweise_reparieren()
+	if verweise:
+		verweise_reparieren()
 	umbenannt = lesbare_namen_herstellen()
 	mitglieder = kontakte_zuordnen()
 	return {"umbenannt": umbenannt, "mitglieder": mitglieder}
@@ -147,12 +160,13 @@ def verweise_reparieren() -> int:
 	if not should_sync():
 		return 0
 	repariert = 0
+	verweis_von = dict(frappe.get_all("Customer", fields=["name", "hd_customer"], as_list=True))
 	for hd in frappe.get_all(
 		"HD Customer", filters={"erpnext_customer": ["is", "set"]}, fields=["name", "erpnext_customer"]
 	):
-		if not frappe.db.exists("Customer", hd.erpnext_customer):
+		if hd.erpnext_customer not in verweis_von:
 			continue
-		if frappe.db.get_value("Customer", hd.erpnext_customer, "hd_customer") != hd.name:
+		if verweis_von[hd.erpnext_customer] != hd.name:
 			frappe.db.set_value("Customer", hd.erpnext_customer, "hd_customer", hd.name, update_modified=False)
 			repariert += 1
 	return repariert
@@ -286,26 +300,39 @@ def kontakte_zuordnen() -> int:
 		return 0
 	neu = 0
 	with _eigene_aenderung():
-		verweise = frappe.get_all(
+		hd_von: dict[str, str | None] = {}
+		je_hd_kunde: dict[str, list[str]] = {}
+		for v in frappe.get_all(
 			"Dynamic Link",
 			filters={"parenttype": "Contact", "link_doctype": "Customer"},
 			fields=["parent", "link_name"],
-		)
-		for v in verweise:
-			hd_customer = _hd_customer_von(v.link_name)  # legt nie neue HD-Kunden an
-			if hd_customer and _mitglied_eintragen(hd_customer, v.parent):
-				neu += 1
+		):
+			if v.link_name not in hd_von:
+				hd_von[v.link_name] = _hd_customer_von(v.link_name)  # legt nie neue HD-Kunden an
+			if hd_von[v.link_name]:
+				je_hd_kunde.setdefault(hd_von[v.link_name], []).append(v.parent)
+
+		for hd_customer, kontakte in je_hd_kunde.items():
+			with _geschuetzt("Mitglieder eintragen fehlgeschlagen", f"HD-Kunde '{hd_customer}'"):
+				neu += _mitglieder_eintragen(hd_customer, kontakte)
 
 		if einstellungen().mitglieder_nach_erpnext:
-			mitglieder = frappe.get_all(
+			kunde_von: dict[str, str | None] = {}
+			for m in frappe.get_all(
 				"HD Customer Member",
 				filters={"parenttype": "HD Customer"},
 				fields=["parent", "contact_name"],
-			)
-			for m in mitglieder:
-				kunde = _erpnext_kunde_von(m.parent)
-				if kunde and _kundenverweis_setzen(m.contact_name, kunde):
-					neu += 1
+			):
+				if m.parent not in kunde_von:
+					kunde_von[m.parent] = _erpnext_kunde_von(m.parent)
+				kunde = kunde_von[m.parent]
+				if not kunde:
+					continue
+				with _geschuetzt(
+					"Kundenverweis setzen fehlgeschlagen", f"Kontakt '{m.contact_name}', Kunde '{kunde}'"
+				):
+					if _kundenverweis_setzen(m.contact_name, kunde):
+						neu += 1
 	return neu
 
 
@@ -320,7 +347,18 @@ def on_contact_update(doc, method=None) -> None:
 
 	Reagiert nur auf Aenderungen: neuer Verweis -> Mitglied, entfernter Verweis -> kein Mitglied mehr.
 	"""
-	if frappe.flags.get(EIGEN_FLAG) or not should_sync() or not einstellungen().kontakte_zuordnen:
+	if frappe.flags.get(EIGEN_FLAG):
+		return
+	if not should_sync() or not einstellungen().kontakte_zuordnen:
+		if doc.get(HAKEN):
+			# sonst loest der Haken unerwartet aus, sobald die Funktion wieder an ist
+			doc.db_set(HAKEN, 0, update_modified=False)
+			doc.set(HAKEN, 0)
+			frappe.msgprint(
+				_("Helpdesk-Kunden wurden nicht angelegt: Die Zuordnung von Kontakten ist ausgeschaltet."),
+				indicator="orange",
+				alert=True,
+			)
 		return
 	jetzt = _kundenverweise(doc)
 	vorher = _kundenverweise(doc.get_doc_before_save())
@@ -412,15 +450,26 @@ def on_hd_customer_update(doc, method=None) -> None:
 			_kundenverweis_entfernen(contact, kunde)
 
 
-def _mitglied_eintragen(hd_customer: str, contact: str) -> bool:
-	"""True, wenn neu eingetragen. Bestehende Mitglieder (auch Manager) bleiben unveraendert."""
-	if frappe.db.exists("HD Customer Member", {"parent": hd_customer, "contact_name": contact}):
-		return False
+def _mitglieder_eintragen(hd_customer: str, kontakte: list[str]) -> int:
+	"""Anzahl neu eingetragener Mitglieder (ein Speichern je HD-Kunde). Bestehende, auch Manager, bleiben."""
+	vorhanden = set(
+		frappe.get_all("HD Customer Member", filters={"parent": hd_customer}, pluck="contact_name")
+	)
+	neu = [c for c in dict.fromkeys(kontakte) if c not in vorhanden]
+	if not neu:
+		return 0
 	hd = frappe.get_doc("HD Customer", hd_customer)
-	hd.append("contacts", {"contact_name": contact, "is_manager": 1 if einstellungen().neue_mitglieder_manager else 0})
+	manager = 1 if einstellungen().neue_mitglieder_manager else 0
+	for contact in neu:
+		hd.append("contacts", {"contact_name": contact, "is_manager": manager})
 	hd.flags.ignore_erpnext_sync = True
 	hd.save(ignore_permissions=True)
-	return True
+	return len(neu)
+
+
+def _mitglied_eintragen(hd_customer: str, contact: str) -> bool:
+	"""True, wenn neu eingetragen. Bestehende Mitglieder (auch Manager) bleiben unveraendert."""
+	return bool(_mitglieder_eintragen(hd_customer, [contact]))
 
 
 def _mitglied_entfernen(hd_customer: str, contact: str) -> bool:

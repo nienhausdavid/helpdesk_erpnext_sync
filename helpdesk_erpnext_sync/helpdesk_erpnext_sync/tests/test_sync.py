@@ -361,3 +361,38 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 		with patch.object(frappe, "enqueue") as enqueue:
 			sync.jetzt_nacharbeiten()
 		enqueue.assert_called_once()
+
+	def test_haken_bei_ausgeschalteter_funktion_wird_zurueckgesetzt(self):
+		kunde = self.kunde_ohne_helpdesk()
+		self.einstellung(kontakte_zuordnen=0)
+		kontakt = self.kontakt(kunde, haken=1)
+		self.assertEqual(frappe.db.get_value("Contact", kontakt.name, "hd_kunde_anlegen"), 0)
+		self.assertFalse(frappe.db.exists("HD Customer", {"erpnext_customer": kunde.name}))
+
+	def test_mitglieder_gebuendelt_und_idempotent(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		sync.lesbare_namen_herstellen()
+		self.einstellung(kontakte_zuordnen=0)
+		a, b = self.kontakt(kunde, vorname="Eins"), self.kontakt(kunde, vorname="Zwei")
+		self.einstellung()
+		self.assertGreaterEqual(sync.kontakte_zuordnen(), 2)
+		self.assertCountEqual(self.mitglieder(self.kundenname), [a.name, b.name])
+		self.assertEqual(sync.kontakte_zuordnen(), 0)
+
+	def test_massenlauf_ueberspringt_fehlerhaften_fall(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		sync.lesbare_namen_herstellen()
+		self.einstellung(kontakte_zuordnen=0)
+		kontakt = self.kontakt(kunde)
+		self.einstellung()
+		with patch.object(sync, "_mitglieder_eintragen", side_effect=frappe.ValidationError("kaputt")):
+			self.assertEqual(sync.kontakte_zuordnen(), 0)  # kein Abbruch
+		self.assertFalse(frappe.db.exists("HD Customer Member", {"contact_name": kontakt.name}))
+		self.assertGreaterEqual(sync.kontakte_zuordnen(), 1)  # danach klappt es
+
+	def test_nacharbeiten_job_nutzt_long_queue(self):
+		with patch.object(frappe, "enqueue") as enqueue:
+			sync.jetzt_nacharbeiten()
+		self.assertEqual(enqueue.call_args.kwargs["queue"], "long")
