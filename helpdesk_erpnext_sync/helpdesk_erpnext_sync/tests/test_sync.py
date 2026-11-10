@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 from helpdesk.integrations.erpnext import api as hd_api
@@ -87,7 +89,7 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 		kunde = self.kunde_ohne_helpdesk()
 		kontakt = self.kontakt(kunde)  # noch kein HD-Kunde, kein Haken -> keine Zuordnung
 		self.assertFalse(frappe.db.exists("HD Customer", {"erpnext_customer": kunde.name}))
-		self.assertEqual(sync.kontakte_zuordnen() >= 0, True)
+		sync.kontakte_zuordnen()
 		self.assertFalse(frappe.db.exists("HD Customer", {"erpnext_customer": kunde.name}))  # Massenlauf legt nichts an
 		hd_api.sync_all_customers()
 		sync.lesbare_namen_herstellen()
@@ -127,6 +129,14 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 			**werte,
 		}
 		frappe.db.set_single_value("Helpdesk Sync Einstellungen", alle)
+		frappe.clear_document_cache("Helpdesk Sync Einstellungen")
+		self.addCleanup(self._einstellung_zuruecksetzen)
+
+	def _einstellung_zuruecksetzen(self):
+		frappe.db.set_single_value(
+			"Helpdesk Sync Einstellungen",
+			{"lesbare_namen": 1, "kontakte_zuordnen": 1, "mitglieder_nach_erpnext": 1, "neue_mitglieder_manager": 0},
+		)
 		frappe.clear_document_cache("Helpdesk Sync Einstellungen")
 
 	def test_standardwerte_ohne_gespeicherte_einstellungen(self):
@@ -299,3 +309,55 @@ class TestHelpdeskErpnextSync(IntegrationTestCase):
 				sync.jetzt_nacharbeiten()
 		finally:
 			frappe.set_user("Administrator")
+
+	# --- Rechte, Fehlerbehandlung, Flags ---------------------------------
+
+	def test_ohne_rechte_kein_mitglied_und_kein_hd_kunde(self):
+		kunde = self.kunde_ohne_helpdesk()
+		frei = self.kontakt(None, vorname="Ohnerecht")
+		with patch.object(sync, "_darf_hd_aendern", return_value=False):
+			doc = frappe.get_doc("Contact", frei.name)
+			doc.append("links", {"link_doctype": "Customer", "link_name": kunde.name})
+			doc.set("hd_kunde_anlegen", 1)
+			doc.save(ignore_permissions=True)
+		self.assertFalse(frappe.db.exists("HD Customer", {"erpnext_customer": kunde.name}))
+		self.assertFalse(frappe.db.exists("HD Customer Member", {"contact_name": frei.name}))
+		self.assertEqual(frappe.db.get_value("Contact", frei.name, "hd_kunde_anlegen"), 0)
+
+	def test_darf_hd_aendern_prueft_benutzerrechte(self):
+		kunde = self.kunde_ohne_helpdesk()
+		self.assertTrue(sync._darf_hd_aendern(kunde.name, anlegen=True))
+		frappe.set_user("Guest")
+		try:
+			self.assertFalse(sync._darf_hd_aendern(kunde.name))
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_umbenennen_fehler_bricht_nicht_ab(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		with patch.object(sync, "rename_doc", side_effect=frappe.ValidationError("kaputt")):
+			self.assertEqual(sync.lesbare_namen_herstellen(), [])  # kein Abbruch
+		# nichts halb umbenannt
+		self.assertEqual(frappe.db.get_value("Customer", kunde.name, "hd_customer"), kunde.name)
+		self.assertTrue(frappe.db.exists("HD Customer", kunde.name))
+
+	def test_umbenennen_namenskonflikt_wird_protokolliert(self):
+		kunde = self.kunde_ohne_helpdesk()
+		hd_api.sync_all_customers()
+		frappe.get_doc({"doctype": "HD Customer", "customer_name": self.kundenname}).insert(ignore_permissions=True)
+		self.assertEqual(sync.lesbare_namen_herstellen(), [])
+		self.assertEqual(frappe.db.get_value("Customer", kunde.name, "hd_customer"), kunde.name)
+
+	def test_cascade_flag_wird_wiederhergestellt(self):
+		with sync._flag_gesetzt("helpdesk_erpnext_sync_test"):
+			with sync._flag_gesetzt("helpdesk_erpnext_sync_test"):
+				pass
+			self.assertTrue(frappe.flags.get("helpdesk_erpnext_sync_test"))
+		self.assertFalse(frappe.flags.get("helpdesk_erpnext_sync_test"))
+
+	def test_knopf_system_manager_darf(self):
+		frappe.db.set_single_value("ERPNext HD Settings", "enabled", 1)
+		with patch.object(frappe, "enqueue") as enqueue:
+			sync.jetzt_nacharbeiten()
+		enqueue.assert_called_once()

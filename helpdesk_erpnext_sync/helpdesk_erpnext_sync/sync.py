@@ -40,14 +40,27 @@ def einstellungen():
 
 
 @contextmanager
-def _eigene_aenderung():
-	"""Die Hooks dieser App reagieren nicht auf Aenderungen, die sie selbst ausloest."""
-	vorher = frappe.flags.get(EIGEN_FLAG)
-	frappe.flags[EIGEN_FLAG] = True
+def _flag_gesetzt(name: str):
+	"""Flag setzen und danach auf den vorherigen Wert zurueckstellen (auch bei Verschachtelung)."""
+	vorher = frappe.flags.get(name)
+	frappe.flags[name] = True
 	try:
 		yield
 	finally:
-		frappe.flags[EIGEN_FLAG] = vorher
+		frappe.flags[name] = vorher
+
+
+def _eigene_aenderung():
+	"""Die Hooks dieser App reagieren nicht auf Aenderungen, die sie selbst ausloest."""
+	return _flag_gesetzt(EIGEN_FLAG)
+
+
+def _darf_hd_aendern(kunde: str, anlegen: bool = False) -> bool:
+	"""Rechte des angemeldeten Benutzers; die Hooks selbst speichern mit ignore_permissions."""
+	return bool(
+		frappe.has_permission("Customer", "read", kunde)
+		and frappe.has_permission("HD Customer", "create" if anlegen else "write")
+	)
 
 
 # --- Massen-Sync und Knopf "Jetzt nacharbeiten" ------------------------------
@@ -202,18 +215,27 @@ def _hd_kunde_umbenennen(kunde: str, alt: str, ziel: str | None) -> bool:
 		)
 		return False
 
-	frappe.flags[CASCADE_FLAG] = True
+	# Ein unzulaessiger Name (Sonderzeichen, zu lang) darf weder das Speichern des Kunden
+	# noch den Massenlauf abbrechen: zurueckrollen, protokollieren, weitermachen.
+	sicherung = "helpdesk_erpnext_sync_umbenennen"
+	frappe.db.savepoint(sicherung)
 	try:
-		rename_doc("HD Customer", alt, ziel, ignore_permissions=True)
-		frappe.db.set_value(
-			"HD Customer",
-			ziel,
-			{"customer_name": ziel, "erpnext_customer": kunde},
-			update_modified=False,
+		with _flag_gesetzt(CASCADE_FLAG):
+			rename_doc("HD Customer", alt, ziel, ignore_permissions=True)
+			frappe.db.set_value(
+				"HD Customer",
+				ziel,
+				{"customer_name": ziel, "erpnext_customer": kunde},
+				update_modified=False,
+			)
+			frappe.db.set_value("Customer", kunde, "hd_customer", ziel, update_modified=False)
+	except Exception:
+		frappe.db.rollback(save_point=sicherung)
+		frappe.log_error(
+			title="Helpdesk ERPNext Sync: Umbenennen fehlgeschlagen",
+			message=f"HD-Kunde '{alt}' -> '{ziel}' (ERPNext-Kunde '{kunde}'):\n{frappe.get_traceback()}",
 		)
-		frappe.db.set_value("Customer", kunde, "hd_customer", ziel, update_modified=False)
-	finally:
-		frappe.flags[CASCADE_FLAG] = False
+		return False
 	return True
 
 
@@ -302,12 +324,15 @@ def on_contact_update(doc, method=None) -> None:
 		return
 	jetzt = _kundenverweise(doc)
 	vorher = _kundenverweise(doc.get_doc_before_save())
-	angelegt, eingetragen, entfernt = [], [], []
+	angelegt, eingetragen, entfernt, verweigert = [], [], [], []
 	# Haken am Kontakt: fehlende HD-Kunden aller verknüpften Kunden jetzt anlegen (gilt einmalig)
 	anlegen = bool(doc.get(HAKEN))
 	with _eigene_aenderung():
 		for kunde in sorted(jetzt if anlegen else jetzt - vorher):
 			gab_es = _hd_customer_von(kunde)
+			if not _darf_hd_aendern(kunde, anlegen=anlegen and not gab_es):
+				verweigert.append(kunde)
+				continue
 			hd_customer = gab_es or (_hd_customer_sicherstellen(kunde) if anlegen else None)
 			if not hd_customer:
 				continue
@@ -317,12 +342,21 @@ def on_contact_update(doc, method=None) -> None:
 				eingetragen.append(hd_customer)
 		for kunde in sorted(vorher - jetzt):
 			hd_customer = _hd_customer_von(kunde)
+			if hd_customer and not _darf_hd_aendern(kunde):
+				verweigert.append(kunde)
+				continue
 			if hd_customer and _mitglied_entfernen(hd_customer, doc.name):
 				entfernt.append(hd_customer)
 
 	if anlegen:
 		doc.db_set(HAKEN, 0, update_modified=False)
 		doc.set(HAKEN, 0)
+	if verweigert:
+		frappe.msgprint(
+			_("Keine Berechtigung für die Helpdesk-Kunden von: {0}").format(", ".join(verweigert)),
+			indicator="orange",
+			alert=True,
+		)
 	if angelegt:
 		frappe.msgprint(_("Helpdesk-Kunde angelegt: {0}").format(", ".join(angelegt)), alert=True)
 	if eingetragen:
